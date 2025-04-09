@@ -63,6 +63,9 @@ func attackCmd() command {
 	fs.Var(&dnsTTLFlag{&opts.dnsTTL}, "dns-ttl", "Cache DNS lookups for the given duration [-1 = disabled, 0 = forever]")
 	fs.BoolVar(&opts.sessionTickets, "session-tickets", false, "Enable TLS session resumption using session tickets")
 	fs.Var(&connectToFlag{&opts.connectTo}, "connect-to", "A mapping of (ip|host):port to use instead of a target URL's (ip|host):port. Can be repeated multiple times.\nIdentical src:port with different dst:port will round-robin over the different dst:port pairs.\nExample: google.com:80:localhost:6060")
+	fs.StringVar(&opts.proxy, "proxy", "", "Use the specified proxy")
+	fs.StringVar(&opts.proxyAuth, "proxy-user", "", "Specify the user name and password to use for proxy authentication")
+	fs.BoolVar(&opts.proxyProto, "haproxy-protocol", false, "Enable proxy protocol")
 	systemSpecificFlags(fs, opts)
 
 	return command{fs, func(args []string) error {
@@ -110,6 +113,9 @@ type attackOpts struct {
 	dnsTTL         time.Duration
 	sessionTickets bool
 	connectTo      map[string][]string
+	proxy          string
+	proxyAuth      string
+	proxyProto     bool
 }
 
 // attack validates the attack arguments, sets up the
@@ -185,6 +191,11 @@ func attack(opts *attackOpts) (err error) {
 		return err
 	}
 
+	proxyURL, err := GetProxyURL(opts)
+	if err != nil {
+		return err
+	}
+
 	var pm *prom.Metrics
 	if opts.promAddr != "" {
 		pm = prom.NewMetrics()
@@ -222,6 +233,8 @@ func attack(opts *attackOpts) (err error) {
 		vegeta.DNSCaching(opts.dnsTTL),
 		vegeta.ConnectTo(opts.connectTo),
 		vegeta.SessionTickets(opts.sessionTickets),
+		vegeta.Proxy(http.ProxyURL(proxyURL)),
+		vegeta.ProxyProtocol(opts.proxyProto),
 	)
 
 	res := atk.Attack(tr, opts.rate, opts.duration, opts.name)

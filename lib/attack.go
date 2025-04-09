@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/tsenart/vegeta/v12/proxyprotocol"
 	"io"
 	"math"
 	"math/rand"
@@ -32,6 +33,9 @@ type Attacker struct {
 	seq        uint64
 	began      time.Time
 	chunked    bool
+	proxy      string
+	proxyAuth  string
+	proxyProto bool
 }
 
 const (
@@ -160,6 +164,16 @@ func Proxy(proxy func(*http.Request) (*url.URL, error)) func(*Attacker) {
 	return func(a *Attacker) {
 		tr := a.client.Transport.(*http.Transport)
 		tr.Proxy = proxy
+	}
+}
+
+func ProxyProtocol(proxyProtocol bool) func(*Attacker) {
+	return func(a *Attacker) {
+		if proxyProtocol {
+			proxyDialer := proxyprotocol.NewProxyDialer()
+			tr := a.client.Transport.(*http.Transport)
+			tr.DialContext = proxyDialer.DialContext
+		}
 	}
 }
 
